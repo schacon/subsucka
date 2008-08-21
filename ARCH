@@ -1,0 +1,42 @@
+
+ Server 
+================
+
+== Workflow ==
+
+* gets a request with a svn repo url
+* contacts the repo and queries max revision number
+* sees how many clients are live and federates the revisions
+* sends each client it's job (url, start_rev, end_rev)
+* polls clients occasionally
+** if one goes down, restarts it
+* when client 1 is done (1-X revisions), clones the repo locally
+* when clients 2-N are done, (in order), fetches the repo and rebases the commits
+* updates project status table
+
+== Methods ==
+
+* ID = new_request(url, git_repo_name)
+* status = request_status(ID)
+* clear_request(ID)
+* push_status(ID, status)
+
+
+ Client
+================
+
+* connects to server, registers itself
+* gets a url and revision range from server
+* imports the svn to git
+* returns clone url
+* removes job from queue
+
+== Methods ==
+
+* ID = start_request(url, start_rev, end_rev)
+* status = request_status(ID)
+* url = get_clone_url(ID)
+* load = client_status
+
+
+
