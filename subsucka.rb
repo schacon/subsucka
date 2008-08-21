@@ -48,7 +48,19 @@ class SubSucka
     end
   end
   
+  #
   # sends each client it’s job (url, start_rev, end_rev)
+  # 
+  # uses a parallel-each library called 'peach', which basically just
+  # spawns a new thread for each iteration of the block and then
+  # waits at the end for them all to finish.  In Erlang, this would be 
+  # where we send a message to the client and the contents of the block
+  # is basically what the client would do
+  #
+  # it ends up building an array of paths for where these partial git 
+  # repositories are.  In this version they are local, in Erlang, they will
+  # likely be over http or ssh
+  #
   def run_clients
     @repos = []
     @client_revs.peach do |start_rev, end_rev|
@@ -69,59 +81,72 @@ class SubSucka
     pp @repos
   end
 
-  
+  # this method takes the array of git urls generated in run_clients and
+  # makes one big repository out of them - basically just slams all the 
+  # objects into a single repo, then walks the commit list (obtained from
+  # a 'svn-log' command) and generates new commit objects that point to the
+  # correct ancestors and contain the correct commit meta-data
+  #
   def combine_results
-    info = get_repo_log
-    dir = new_dir
-    Dir.chdir(dir) do
-      `git init`
-      r = @repos.sort
-      first = r.shift
-      `git clone #{first[1]} repo`
+    info = get_repo_log   # get the svn commit metadata via 'svn log'
+    dir = new_dir         # create a new random directory for us to build 
+                          #   our new git repository in
+    Dir.chdir(dir) do     
+      r = @repos.sort     # we need to go through our partial-repos in the correct order
+      
+      first = r.shift               # the first repo is special, since it is a clone
+      `git clone #{first[1]} repo`  # this just copies the "commit 1-X" client repo
       branches = ['master']
       
-      dir = File.join(dir, 'repo')
+      dir = File.join(dir, 'repo')  # make our new working directory the new git repo
       Dir.chdir(dir) do
-        r.each do |num, path|
-          `git remote add r#{num} #{path}`
-          `git fetch r#{num}`
-          branches << "r#{num}/master"
+        r.each do |num, path|               # for each repo, in order
+          `git remote add r#{num} #{path}`  #   - add the client partial-repo
+          `git fetch r#{num}`               #   - fetch all it's objects locally
+          branches << "r#{num}/master"      #   - add this new branch to our list
         end
         
         last_commit = nil
-        branches.each do |branch|
+        branches.each do |branch|           # for each branch, get a list of each current commit and the corresponding tree
           commits = `git log --reverse --pretty=format:"%T:%s" #{branch}`.split("\n")
           commits = commits.map { |line| line.split(":") }
-          commits.each do |tree_sha, rev_id|
-            puts "rewriting : #{tree_sha} #{rev_id}"
-            if (rev_data = info.assoc(rev_id))
+          commits.each do |tree_sha, rev_id|          # for each commit in this client branch
+            puts "rewriting : #{tree_sha} #{rev_id}"  
+            if (rev_data = info.assoc(rev_id))        # grab the 'svn log' data for that commit
               ENV['GIT_AUTHOR_NAME'] = ENV['GIT_COMMITTER_NAME'] = rev_data[1]
               ENV['GIT_AUTHOR_EMAIL'] = ENV['GIT_COMMITTER_EMAIL'] = rev_data[1] + '@email.com'
               ENV['GIT_AUTHOR_DATE'] = ENV['GIT_COMMITTER_DATE'] = rev_data[2]
-              comment = Tempfile.new('comment')
-              comment.write(rev_data[4])
-              comment.close
+              comment = Tempfile.new('comment')       # |
+              comment.write(rev_data[4])              # |
+              comment.close                           # `-- prepare commit meta-data
               parent = ''
               parent = "-p #{last_commit}" if last_commit
-              puts last_commit = `git commit-tree #{tree_sha} #{parent} < #{comment.path}`.strip
+              
+              # the next line here writes the new commit object with the proper data
+              # and records that commit sha so we can use it as the parent for the next one
+              # (which is why we have to sort the branches and run --reverse on the git log, so it goes 1-END)
+              last_commit = `git commit-tree #{tree_sha} #{parent} < #{comment.path}`.strip
             end
           end
         end
-        
+
+        # update the 'master' branch to point to our last modified commit
         `git update-ref refs/heads/master #{last_commit}`
         
+        # remove all the temporary remote branches we were using
         branches.each do |branch|
           next if branch == 'master'
           `git remote rm #{branch.gsub('/master', '')}`
         end
         
+        # pack up the repository and remove any unreferenced objects we've left behind
         `git prune`
         `git pack-refs`
         `git gc --aggressive`
         
       end
     end
-    dir
+    dir  # return the url of the new, spiffy git repo
   end
   
   def combine_repos(arr)
