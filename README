@@ -1,0 +1,31 @@
+SubSucka
+======================
+
+SubSucka sucks a SVN repository into Git in a (eventually) distributed manner. 
+Currently, it simply threads, so it can do multiple SVN updates in parallel.
+
+The idea is that you run something like this:
+
+s = SubSucka.new('http://jqueryjs.googlecode.com/svn/trunk/build', 40)
+s.result_url
+
+Since jQuery has about 4000 commits, this will split up into 40 threads that each 
+fetch 1/40th of the repo, then pull all the objects into one repo and rewrite all
+of the commit objects properly with data obtained from 'svn log'.
+
+When it works (ie: when SVN doesn't hang), it goes WAY faster than git-svn import.
+
+
+ToDo
+======================
+
+* port to Erlang
+* handle branches and tags
+* use an author map
+* deal with SVN hanging
+
+
+Authors
+======================
+
+* Scott Chacon <schacon@gmail.com>
