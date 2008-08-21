@@ -31,6 +31,7 @@ ping() ->
 init([Master, UpRetry, DownRetry]) ->
   process_flag(trap_exit, true),
   link(global:whereis_name(slave_manager)),
+  slave_manager:watch(self()),
   Ref1 = pinger(UpRetry),
   {ok, up, #state{master = Master, up_retry = UpRetry, down_retry = DownRetry, ping_ref = Ref1}}.
 
@@ -68,7 +69,7 @@ rejoin({ping, Ref}, StateData) when Ref =:= StateData#state.ping_ref ->
     ok ->
       error_logger:info_msg("Master node is responsive. Going 'up'.~n"),
       link(global:whereis_name(slave_manager)),
-      resource_manager:register_nodes(),
+      slave_manager:watch(self()),
       Ref1 = pinger(500),
       {next_state, up, StateData#state{ping_ref = Ref1}};
     fail ->
