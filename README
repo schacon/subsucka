@@ -1,13 +1,7 @@
 SubSucka
 ======================
 
-SubSucka sucks a SVN repository into Git in a (eventually) distributed manner. 
-Currently, it simply threads, so it can do multiple SVN updates in parallel.
-
-The idea is that you run something like this:
-
-s = SubSucka.new('http://jqueryjs.googlecode.com/svn/trunk/build', 40)
-s.result_url
+SubSucka sucks a SVN repository into Git in a distributed manner. 
 
 Since jQuery has about 4000 commits, this will split up into 40 threads that each 
 fetch 1/40th of the repo, then pull all the objects into one repo and rewrite all
@@ -16,7 +10,15 @@ of the commit objects properly with data obtained from 'svn log'.
 When it works (ie: when SVN doesn't hang), it goes WAY faster than git-svn import.
 
 
-Benchmarks
+Getting Started
+======================
+
+ rake c                      # will compile and start the shell
+ > subsucka_server:start().  # starts the master node
+ > subsucka_slave:start().   # starts the slave node
+ > subversion_import:import_uri('http://test.com').
+
+Benchmarks (Ruby Prototype)
 ======================
 
 $> time ruby subsucka.rb 
