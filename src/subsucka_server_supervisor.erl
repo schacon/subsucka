@@ -1,13 +1,17 @@
 -module(subsucka_server_supervisor).
 -behaviour(supervisor).
 
--export([start/0, start_link/0, init/1]).
+-export([start/0, start_link/0, start_shell/0, init/1]).
 
 start() ->
   spawn(fun() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, _Arg = [])
   end).
   
+start_shell() ->
+  {ok, Pid} = supervisor:start_link({local, ?MODULE}, ?MODULE, _Arg = []),
+  unlink(Pid).  
+
 start_link() ->
   supervisor:start_link({local, ?MODULE}, ?MODULE, []).
   

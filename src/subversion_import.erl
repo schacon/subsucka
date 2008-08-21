@@ -9,13 +9,15 @@
          terminate/2, code_change/3]).
 -compile([export_all]).
 
-start_link() -> gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link() -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 stop()  -> gen_server:call(?MODULE, stop).
 
 import_uri(Uri) -> gen_server:call(?MODULE, {import, Uri}).
 
 
-init([]) -> {ok, []}.
+init([]) -> 
+  error_logger:info_msg("Starting up SVN server.~n"),
+  {ok, []}.
 
 handle_call({import, Uri}, _From, State) ->
   Reply = ok,
