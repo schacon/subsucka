@@ -19,6 +19,7 @@ start_link() -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 stop()  -> gen_server:call(?MODULE, stop).
 
 watch(Pid) -> 
+  io:format("~p watching~n", [Pid]),
   gen_server:cast(?MODULE, {watch, Pid}).
   
 identity() ->
@@ -28,7 +29,7 @@ identity() ->
 init([]) -> 
   io:format("~p starting~n", [?MODULE]),
   net_kernel:monitor_nodes(true, [nodedown_reason]),
-  {ok, []}.
+  {ok, #state{}}.
 
 handle_call({identity}, _From, State) ->
   {reply, {ok, node()}, State};
@@ -37,7 +38,6 @@ handle_call(stop, _From, State) ->
   
 handle_cast({watch, Pid}, State) ->
   Node = node(Pid),
-  error_logger:warning_msg("Now monitoring node ~p~n", [Node]),
   error_logger:info_msg("Now monitoring node ~p~n", [Node]),
   #state{node_pids=NodePids} = State,
 
