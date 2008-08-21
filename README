@@ -16,6 +16,16 @@ of the commit objects properly with data obtained from 'svn log'.
 When it works (ie: when SVN doesn't hang), it goes WAY faster than git-svn import.
 
 
+Benchmarks
+======================
+
+$> time ruby subsucka.rb 
+real	8m53.966s
+
+$>time git svn clone http://tarski.googlecode.com/svn/trunk/ t3
+real	14m30.805s
+
+
 ToDo
 ======================
 
