@@ -192,7 +192,8 @@ end
 
 #SubSucka.new('http://bluecove.googlecode.com/svn/trunk', 4)
 
-s = SubSucka.new('http://garmini.googlecode.com/svn/trunk', 4)
+#s = SubSucka.new('http://garmini.googlecode.com/svn/trunk', 4)
+s = SubSucka.new('http://tarski.googlecode.com/svn/trunk', 8)
 puts
 puts 'Git Repo:'
 puts s.result_url
