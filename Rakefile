@@ -10,6 +10,10 @@ task :slave => [:default] do
   sh "erl -sname slave1 -setcookie subsucka -pa ./ebin -subsucka_slave master 'master1@agadorsparticus'"
 end
 
+task :slave2 => [:default] do
+  sh "erl -sname slave2 -setcookie subsucka -pa ./ebin -subsucka_slave master 'master1@agadorsparticus'"
+end
+
 task :server => [:default] do
   sh "erl -sname master1 -setcookie subsucka -pa ./ebin"
 end
