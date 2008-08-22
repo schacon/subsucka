@@ -1,4 +1,4 @@
--module(subsucka_server_supervisor).
+-module(subsucka_supervisor).
 -behaviour(supervisor).
 
 -export([start/0, start_link/0, start_shell/0, init/1]).
@@ -17,7 +17,7 @@ start_link() ->
   
 init([]) ->
   {ok, {{one_for_one, 100, 300},
-    [{slave_manager,
-       {slave_manager, start_link, []},
-       permanent, 10000, worker, [slave_manager]}
+    [{subversion_import,
+       {subversion_import, start_link, []},
+       permanent, 10000, worker, [subversion_import]}
     ]}}.
