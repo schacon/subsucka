@@ -22,8 +22,7 @@ init([]) ->
 
 handle_call({import, Uri}, _From, State) ->
   Reply = ok,
-  io:format("~p~n", [Uri]),
-  %%io:format("Nodes: ~p~n", nodes()),
+  spawn_link(?MODULE, import_repo, [Uri]),
   {reply, Reply, State};
 handle_call(stop, _From, State) ->
   {stop, normal, stopped, []}.
@@ -62,8 +61,6 @@ get_revisions(Url) ->
 import_repo(Url) ->
   Ref  = make_ref(),
   RefL = erlang:ref_to_list(Ref),
-  io:format("~p~n", [RefL]),
-  io:format("~p~n", [Url]),
   case get_revisions(Url) of
     {ok, Revisions} ->
       go(Url, RefL, Revisions);
