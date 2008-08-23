@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, stop/0, import_uri/1]).
+-export([start_link/0, stop/0, import_uri/1, import_part/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -59,32 +59,37 @@ get_revisions(Url) ->
   end.
 
 import_repo(Url) ->
-  Ref  = make_ref(),
-  RefL = erlang:ref_to_list(Ref),
   case get_revisions(Url) of
     {ok, Revisions} ->
-      go(Url, RefL, Revisions);
+      RevList = split_range(Revisions, length(nodes())),
+      NodeRevList = zip_lists(nodes(), RevList),
+      lists:foreach(fun(I) -> spawn_node(Url, I) end, NodeRevList);
     _ ->
       error_logger:error_msg("Unable to get info for ~s", [Url])
   end.
 
-go(Url, Ref, Revisions) ->
+spawn_node(Url, RevList) ->
+  io:format("Spawn ~p~n", [RevList]),
+  {Node, RevTuple} = RevList,
+  spawn(Node, subversion_import, import_part, [Url, RevTuple]).
+  
+import_part(Url, RevTuple) ->
+  RefR  = make_ref(),
+  Ref = erlang:ref_to_list(RefR),
   cmd("mkdir '" ++ Ref ++ "'", "."),
   cmd("git init", Ref),
   cmd("echo '.svn' > .gitignore", Ref),
   cmd("git add .; git commit -m \"init with .gitignore\"", Ref),
-  checkout(Url, Ref, Revisions).
+  {StartRev, EndRev} = RevTuple,
+  checkout_part(Url, Ref, StartRev, EndRev).
   
-checkout(Url, Ref, Revisions) ->
-  checkout(Url, Ref, 1, Revisions).
-
-checkout(Url, Ref, N, Revisions) ->
+checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
   io:format("~p~n", [Out]),
   case regexp:match(Out, "svn: Unable") of
     {match, _} ->
       io:format("Unable to start at r~b", [N]),
-      checkout(Url, Ref, N+1, Revisions);
+      checkout_part(Url, Ref, N+1, Revisions);
     _ ->
       update(Ref, N+1, Revisions)
   end.
@@ -103,3 +108,23 @@ cmd(Cmd, Data, Dir) ->
 
 cmd(Cmd, Dir) ->
   os:cmd("cd '" ++ Dir ++ "'; " ++ Cmd).
+
+split_range(Range, Splits) ->
+  case Splits > 1 of
+    true -> Each = round(Range / Splits),
+            list_range([], 0, Each, Range);
+    false -> [{0, Range}]
+  end.
+
+list_range(Range, Start, Each, Max) ->
+  End = Start + Each,
+  case End > Max of
+    true  -> [{Start, Max}];
+    false -> [{Start, End} | list_range(Range, End + 1, Each, Max)]
+  end.
+
+zip_lists([], []) -> [];
+zip_lists(ListOne, ListTwo) ->
+  [ElOne|TailOne] = ListOne,
+  [ElTwo|TailTwo] = ListTwo,
+  lists:flatten([{ElOne, ElTwo}, zip_lists(TailOne, TailTwo)]).
