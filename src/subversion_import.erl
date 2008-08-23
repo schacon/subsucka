@@ -63,16 +63,15 @@ import_repo(Url) ->
     {ok, Revisions} ->
       RevList = split_range(Revisions, 10),
       Remotes = pmap(fun(A, B) -> import_part(A, B) end, RevList, nodes(), Url),
-      io:format("imp: ~p~n", [Remotes]);
+      io:format("imp: ~p~n", [Remotes]),
+      combine_results(Remotes);
     _ ->
       error_logger:error_msg("Unable to get info for ~s", [Url])
   end.
-    
+  
 import_part(RevTuple, Url) ->
-  RefR  = make_ref(),
-  Ref = erlang:ref_to_list(RefR),
-  io:format("import ~p~n", [RevTuple]),
-  cmd("mkdir '" ++ Ref ++ "'", "."),
+  Ref = new_dir(),
+  error_logger:info_msg("import ~p~n", [RevTuple]),
   cmd("git init", Ref),
   cmd("echo '.svn' > .gitignore", Ref),
   cmd("git add .; git commit -m \"init with .gitignore\"", Ref),
@@ -82,7 +81,7 @@ import_part(RevTuple, Url) ->
   
 checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
-  io:format("~p~n", [Out]),
+  %%io:format("~p~n", [Out]),
   case regexp:match(Out, "svn: Unable") of
     {match, _} ->
       io:format("Unable to start at r~b", [N]),
@@ -94,11 +93,32 @@ checkout_part(Url, Ref, N, Revisions) ->
 update(_Ref, N, Revisions) when N > Revisions ->
   ok;
 update(Ref, N, Revisions) ->
-  io:format("~~ updating ~b of ~b~n", [N, Revisions]),
+  error_logger:info_msg("~~ updating ~b of ~b~n", [N, Revisions]),
   cmd("svn update -r~b", [N], Ref),
   cmd("git add .; git commit -m 'r~b'", [N], Ref),
   update(Ref, N+1, Revisions).
 
+combine_results(Remotes) ->
+  Ref = new_dir(),
+  error_logger:info_msg("combine ~p~n", [Ref]),
+  [First|Rest] = Remotes,
+  cmd("git clone " ++ First ++ " repo", Ref),
+  Repo = Ref ++ "/repo",
+  Res = combine_rest_results(Rest, Repo, 1),
+  io:format("~p~n", [Res]).
+  
+combine_rest_results([], Repo, Num) -> [];
+combine_rest_results(Remotes, Repo, Num) ->
+  [Next|Rem] = Remotes,
+  io:format("in repo: ~p~n", [Repo]),
+  io:format("git remote add r~b ~p~n", [Num, Next]),
+  cmd("git remote add r~b ~p", [Num, Next], Repo),
+  cmd("git fetch r~b", [Num], Repo),
+  Branches = lists:flatten(["r" ++ erlang:integer_to_list(Num), combine_rest_results(Rem, Repo, Num + 1)]),
+  rewrite_commits(Branches, Repo).
+
+rewrite_commits(Branches, Repo) ->
+  io:format("RW Com: ~p ~p~n", [Branches, Repo]).
 
 cmd(Cmd, Data, Dir) ->
   cmd(io_lib:format(Cmd, Data), Dir).
@@ -119,6 +139,14 @@ list_range(Range, Start, Each, Max) ->
     true  -> [{Start, Max}];
     false -> [{Start, End} | list_range(Range, End + 1, Each, Max)]
   end.
+  
+new_dir() ->  
+  {A, B, C} = erlang:now(),           
+  random:seed(A, B, C),
+  Ref  = "/tmp/import" ++ integer_to_list(random:uniform(100000)),
+  cmd("mkdir '" ++ Ref ++ "'", "."),
+  Ref.
+
 
 pmap(Fun, List, Nodes, ExtraArgs) -> 
   SpawnFun =
