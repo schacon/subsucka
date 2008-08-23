@@ -61,27 +61,24 @@ get_revisions(Url) ->
 import_repo(Url) ->
   case get_revisions(Url) of
     {ok, Revisions} ->
-      RevList = split_range(Revisions, length(nodes())),
-      NodeRevList = zip_lists(nodes(), RevList),
-      lists:foreach(fun(I) -> spawn_node(Url, I) end, NodeRevList);
+      RevList = split_range(Revisions, 10),
+      Remotes = pmap(fun(A, B) -> import_part(A, B) end, RevList, nodes(), Url),
+      io:format("imp: ~p~n", [Remotes]);
     _ ->
       error_logger:error_msg("Unable to get info for ~s", [Url])
   end.
-
-spawn_node(Url, RevList) ->
-  io:format("Spawn ~p~n", [RevList]),
-  {Node, RevTuple} = RevList,
-  spawn(Node, subversion_import, import_part, [Url, RevTuple]).
-  
-import_part(Url, RevTuple) ->
+    
+import_part(RevTuple, Url) ->
   RefR  = make_ref(),
   Ref = erlang:ref_to_list(RefR),
+  io:format("import ~p~n", [RevTuple]),
   cmd("mkdir '" ++ Ref ++ "'", "."),
   cmd("git init", Ref),
   cmd("echo '.svn' > .gitignore", Ref),
   cmd("git add .; git commit -m \"init with .gitignore\"", Ref),
   {StartRev, EndRev} = RevTuple,
-  checkout_part(Url, Ref, StartRev, EndRev).
+  checkout_part(Url, Ref, StartRev, EndRev),
+  Ref.
   
 checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
@@ -123,8 +120,15 @@ list_range(Range, Start, Each, Max) ->
     false -> [{Start, End} | list_range(Range, End + 1, Each, Max)]
   end.
 
-zip_lists([], []) -> [];
-zip_lists(ListOne, ListTwo) ->
-  [ElOne|TailOne] = ListOne,
-  [ElTwo|TailTwo] = ListTwo,
-  lists:flatten([{ElOne, ElTwo}, zip_lists(TailOne, TailTwo)]).
+pmap(Fun, List, Nodes, ExtraArgs) -> 
+  SpawnFun =
+    case length(Nodes) of
+       0 -> fun spawn/1;
+       Length ->
+         NextNode = fun() -> lists:nth(random:uniform(Length), Nodes) end,
+         fun(F) -> spawn(NextNode(), F) end
+    end,
+  Parent = self(),
+  Pids = [SpawnFun(fun() -> Parent ! {self(), (catch Fun(Elem, ExtraArgs))} end)
+    || Elem <- List],
+  [receive {Pid, Val} -> Val end || Pid <- Pids].
