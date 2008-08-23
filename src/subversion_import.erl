@@ -81,7 +81,7 @@ import_part(RevTuple, Url) ->
   
 checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
-  %%io:format("~p~n", [Out]),
+  io:format("~p~n", [Out]),
   case regexp:match(Out, "svn: Unable") of
     {match, _} ->
       io:format("Unable to start at r~b", [N]),
@@ -95,7 +95,7 @@ update(_Ref, N, Revisions) when N > Revisions ->
 update(Ref, N, Revisions) ->
   error_logger:info_msg("~~ updating ~b of ~b~n", [N, Revisions]),
   cmd("svn update -r~b", [N], Ref),
-  cmd("git add .; git commit -m 'r~b'", [N], Ref),
+  cmd("git commit -a -m 'r~b'", [N], Ref),
   update(Ref, N+1, Revisions).
 
 combine_results(Remotes) ->
@@ -104,8 +104,10 @@ combine_results(Remotes) ->
   [First|Rest] = Remotes,
   cmd("git clone " ++ First ++ " repo", Ref),
   Repo = Ref ++ "/repo",
-  Res = combine_rest_results(Rest, Repo, 1),
-  io:format("~p~n", [Res]).
+  Branches = combine_rest_results(Rest, Repo, 1),
+  io:format("~p~n", [Branches]),
+  AllBranches = lists:flatten([{"master"}, Branches]),  
+  rewrite_commits(AllBranches, Repo).
   
 combine_rest_results([], Repo, Num) -> [];
 combine_rest_results(Remotes, Repo, Num) ->
@@ -114,12 +116,22 @@ combine_rest_results(Remotes, Repo, Num) ->
   io:format("git remote add r~b ~p~n", [Num, Next]),
   cmd("git remote add r~b ~p", [Num, Next], Repo),
   cmd("git fetch r~b", [Num], Repo),
-  Branches = lists:flatten(["r" ++ erlang:integer_to_list(Num), combine_rest_results(Rem, Repo, Num + 1)]),
-  rewrite_commits(Branches, Repo).
+  BranchName = {"r" ++ erlang:integer_to_list(Num) ++ "/master"},
+  lists:flatten([BranchName, combine_rest_results(Rem, Repo, Num + 1)]).
 
 rewrite_commits(Branches, Repo) ->
-  io:format("RW Com: ~p ~p~n", [Branches, Repo]).
+  io:format("RW Com: ~p ~p~n", [Branches, Repo]),
+  [Branch|RestBranches] = Branches,
+  rewrite_branch(Branch, Repo),
+  rewrite_commits(RestBranches, Repo).
 
+rewrite_branch([], Repo) -> [];
+rewrite_branch(Branch, Repo) ->
+  {BranchStr} = Branch,
+  Out = cmd("git log --reverse --pretty=format:\"%T:%s\" ~p", [BranchStr], Repo),
+  io:format("Out: ~p~n", [Out]),
+  io:format("RW Br: ~p~n", [BranchStr]).
+  
 cmd(Cmd, Data, Dir) ->
   cmd(io_lib:format(Cmd, Data), Dir).
 
@@ -129,8 +141,8 @@ cmd(Cmd, Dir) ->
 split_range(Range, Splits) ->
   case Splits > 1 of
     true -> Each = round(Range / Splits),
-            list_range([], 0, Each, Range);
-    false -> [{0, Range}]
+            list_range([], 1, Each, Range);
+    false -> [{1, Range}]
   end.
 
 list_range(Range, Start, Each, Max) ->
