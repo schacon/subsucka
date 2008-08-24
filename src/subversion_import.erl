@@ -64,7 +64,7 @@ import_repo(Url) ->
       RevList = split_range(Revisions, 10),
       Remotes = pmap(fun(A, B) -> import_part(A, B) end, RevList, nodes(), Url),
       io:format("imp: ~p~n", [Remotes]),
-      combine_results(Remotes);
+      combine_results(Remotes, Url);
     _ ->
       error_logger:error_msg("Unable to get info for ~s", [Url])
   end.
@@ -81,7 +81,8 @@ import_part(RevTuple, Url) ->
   
 checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
-  io:format("~p~n", [Out]),
+  cmd("git add .; git commit -a -m 'r~b'", [N], Ref),
+  error_logger:info_msg("~~ updating ~b of ~b~n", [N, Revisions]),
   case regexp:match(Out, "svn: Unable") of
     {match, _} ->
       io:format("Unable to start at r~b", [N]),
@@ -95,19 +96,22 @@ update(_Ref, N, Revisions) when N > Revisions ->
 update(Ref, N, Revisions) ->
   error_logger:info_msg("~~ updating ~b of ~b~n", [N, Revisions]),
   cmd("svn update -r~b", [N], Ref),
-  cmd("git commit -a -m 'r~b'", [N], Ref),
+  cmd("git add .; git commit -a -m 'r~b'", [N], Ref),
   update(Ref, N+1, Revisions).
 
-combine_results(Remotes) ->
+combine_results(Remotes, Url) ->
   Ref = new_dir(),
   error_logger:info_msg("combine ~p~n", [Ref]),
   [First|Rest] = Remotes,
   cmd("git clone " ++ First ++ " repo", Ref),
   Repo = Ref ++ "/repo",
-  Branches = combine_rest_results(Rest, Repo, 1),
-  io:format("~p~n", [Branches]),
-  AllBranches = lists:flatten([{"master"}, Branches]),  
-  rewrite_commits(AllBranches, Repo).
+  combine_rest_results(Rest, Repo, 1),
+  rewrite_commits(Repo, Url),
+  Repo.
+  
+rewrite_commits(Repo, Url) ->
+  Out = cmd("./rewrite_commits.rb ~p ~p", [Repo, Url], "."),
+  io:format("~p~n", [Out]).
   
 combine_rest_results([], Repo, Num) -> [];
 combine_rest_results(Remotes, Repo, Num) ->
@@ -119,19 +123,6 @@ combine_rest_results(Remotes, Repo, Num) ->
   BranchName = {"r" ++ erlang:integer_to_list(Num) ++ "/master"},
   lists:flatten([BranchName, combine_rest_results(Rem, Repo, Num + 1)]).
 
-rewrite_commits(Branches, Repo) ->
-  io:format("RW Com: ~p ~p~n", [Branches, Repo]),
-  [Branch|RestBranches] = Branches,
-  rewrite_branch(Branch, Repo),
-  rewrite_commits(RestBranches, Repo).
-
-rewrite_branch([], Repo) -> [];
-rewrite_branch(Branch, Repo) ->
-  {BranchStr} = Branch,
-  Out = cmd("git log --reverse --pretty=format:\"%T:%s\" ~p", [BranchStr], Repo),
-  io:format("Out: ~p~n", [Out]),
-  io:format("RW Br: ~p~n", [BranchStr]).
-  
 cmd(Cmd, Data, Dir) ->
   cmd(io_lib:format(Cmd, Data), Dir).
 
