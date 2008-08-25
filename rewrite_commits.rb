@@ -38,6 +38,7 @@ class SubSucka
 
         ref = commit[5]
         name = commit[6]
+        next if !(ref == 'trunk' || ref == 'tags' || ref == 'branches')
         ref = File.join(ref, name) if ref != 'trunk'
         
         parent = ''
@@ -46,9 +47,10 @@ class SubSucka
 
         tree_sha = `git rev-parse #{commit_sha}:#{ref}`.strip
         
-        last_commits[ref] = `git commit-tree #{tree_sha} #{parent} < #{comment.path}`.strip
+        tc = `git commit-tree #{tree_sha} #{parent} < #{comment.path}`.strip
+        last_commits[ref] = tc if tc != ''
       end
-      
+            
       # write the last commits heads
       last_commits.each do |ref, sha|
         if ref == 'trunk'
@@ -127,19 +129,5 @@ svn_url  = ARGV[1]
 
 sk = SubSucka.new(repo_dir, svn_url)
 sk.build
-
-# go through all the remotes and list tree subshas -> rX
-
-# get author mapping
-
-# get list for trunk
-
-# get list for branches
-# svn list branches
-# get log for each branch
-
-# get list for tags
-# svn list branches
-# get log for each tag
 
 

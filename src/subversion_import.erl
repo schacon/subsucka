@@ -78,7 +78,8 @@ import_part(RevTuple, Url) ->
   {StartRev, EndRev} = RevTuple,
   checkout_part(Url, Ref, StartRev, EndRev),
   cmd("git gc --aggressive", Ref),
-  Ref.
+  cmd("git update-server-info", Ref),
+  {net_adm:localhost(), Ref}.
   
 checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
@@ -104,7 +105,10 @@ combine_results(Remotes, Url) ->
   Ref = new_dir(),
   error_logger:info_msg("combine ~p~n", [Ref]),
   [First|Rest] = Remotes,
-  cmd("git clone " ++ First ++ " repo", Ref),
+  {HostName, Path} = First,
+  CloneUrl = "http://" ++ HostName ++ Path ++ "/.git",
+  io:format("git clone " ++ CloneUrl ++ " repo"),
+  cmd("git clone " ++ CloneUrl ++ " repo", Ref),
   Repo = Ref ++ "/repo",
   combine_rest_results(Rest, Repo, 1),
   rewrite_commits(Repo, Url),
@@ -117,9 +121,9 @@ rewrite_commits(Repo, Url) ->
 combine_rest_results([], Repo, Num) -> [];
 combine_rest_results(Remotes, Repo, Num) ->
   [Next|Rem] = Remotes,
-  io:format("in repo: ~p~n", [Repo]),
-  io:format("git remote add r~b ~p~n", [Num, Next]),
-  cmd("git remote add r~b ~p", [Num, Next], Repo),
+  {HostName, Path} = Next,
+  CloneUrl = "http://" ++ HostName ++ Path ++ "/.git",
+  cmd("git remote add r~b ~p", [Num, CloneUrl], Repo),
   cmd("git fetch r~b", [Num], Repo),
   BranchName = {"r" ++ erlang:integer_to_list(Num) ++ "/master"},
   lists:flatten([BranchName, combine_rest_results(Rem, Repo, Num + 1)]).
@@ -150,7 +154,6 @@ new_dir() ->
   Ref  = "/tmp/import" ++ integer_to_list(random:uniform(100000)),
   cmd("mkdir '" ++ Ref ++ "'", "."),
   Ref.
-
 
 pmap(Fun, List, Nodes, ExtraArgs) -> 
   SpawnFun =
