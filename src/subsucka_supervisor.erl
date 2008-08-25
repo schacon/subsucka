@@ -19,5 +19,8 @@ init([]) ->
   {ok, {{one_for_one, 100, 300},
     [{subversion_import,
        {subversion_import, start_link, []},
-       permanent, 10000, worker, [subversion_import]}
+       permanent, 10000, worker, [subversion_import]},
+     {rebar,
+       {rebar, start, []},
+       permanent, 10000, worker, [rebar]}
     ]}}.
