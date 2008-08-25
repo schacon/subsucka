@@ -6,7 +6,10 @@ require "client"
 require "rubygems"
 require "thin"
 
-Subsucka = Rebar::Erlang.new(:subversion_import, '127.0.0.1', 5500)
+Subsucka = Rebar::Erlang.new(
+  :subversion_import, 
+  '127.0.0.1', 
+  5500) unless defined?(Subsucka)
 
 get '/' do
   haml :index
