@@ -61,7 +61,7 @@ get_revisions(Url) ->
 import_repo(Url) ->
   case get_revisions(Url) of
     {ok, Revisions} ->
-      RevList = split_range(Revisions, 10),
+      RevList = split_range(Revisions, split_count(Revisions, length(nodes()))),
       Remotes = pmap(fun(A, B) -> import_part(A, B) end, RevList, nodes(), Url),
       io:format("imp: ~p~n", [Remotes]),
       combine_results(Remotes, Url);
@@ -134,6 +134,15 @@ cmd(Cmd, Data, Dir) ->
 cmd(Cmd, Dir) ->
   os:cmd("cd '" ++ Dir ++ "'; " ++ Cmd).
 
+% no more than 3 per node
+% no less than 50 per process  
+split_count(RevCount, NodeCount) ->
+  InitialGuess = round(RevCount / (NodeCount * 3)),
+  case InitialGuess < 25 of
+    true  -> round(RevCount / 25);
+    false -> (NodeCount * 3)
+  end.
+  
 split_range(Range, Splits) ->
   case Splits > 1 of
     true -> Each = round(Range / Splits),

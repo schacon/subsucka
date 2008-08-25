@@ -18,8 +18,15 @@ class SubSucka
     build_tree_rev_shas    
     write_commits
     finish_repo
+    register_finish
   end
 
+  def register_finish
+    File.open("/tmp/projects", 'a') do |f|
+      f.write([@repo, @svn_url].join(',') + "\n")
+    end
+  end
+  
   def get_branch_list(br)
     branches = `svn list #{@svn_url}/#{br}`.split("\n").map { |b| b.gsub('/', '') }
   end
