@@ -77,6 +77,7 @@ import_part(RevTuple, Url) ->
   cmd("git add .; git commit -m \"init with .gitignore\"", Ref),
   {StartRev, EndRev} = RevTuple,
   checkout_part(Url, Ref, StartRev, EndRev),
+  cmd("git gc --aggressive", Ref),
   Ref.
   
 checkout_part(Url, Ref, N, Revisions) ->

@@ -14,53 +14,56 @@ class SubSucka
   end
   
   def build
-    build_tree_rev_shas
-    write_trunk
-    write_refs('branches', 'heads')
-    write_refs('tags', 'tags')
+    build_repo_log
+    build_tree_rev_shas    
+    write_commits
     finish_repo
   end
 
-  def write_trunk
-    info = get_repo_log('trunk')
-    write_commits(info, 'heads/master')
-  end
-
-  def write_refs(svn, git)
-    pp branches = get_branch_list(svn)
-    branches.each do |branch|
-      info = get_repo_log("#{svn}/#{branch}")
-      puts branch
-      puts info.size
-      write_commits(info, "#{git}/#{branch}")
-    end
-  end
-
   def get_branch_list(br)
-    branches = `svn list #{@svn_url}/#{br}`.split("\n")
+    branches = `svn list #{@svn_url}/#{br}`.split("\n").map { |b| b.gsub('/', '') }
   end
     
-  def write_commits(info, ref)
-    return if info.size < 1
-    last_commit = nil
+  def write_commits
+    last_commits = {}
     Dir.chdir(@repo) do     
-      info.reverse.each do |commit|
-        next if !(tree_sha = @tree_rev_shas[commit[0]])
+      @repo_log.reverse.each do |commit|
+        next if !(commit_sha = @tree_rev_shas[commit[0]])
         ENV['GIT_AUTHOR_NAME']  = ENV['GIT_COMMITTER_NAME']  = commit[1]
         ENV['GIT_AUTHOR_EMAIL'] = ENV['GIT_COMMITTER_EMAIL'] = commit[1] + '@email.com'
         ENV['GIT_AUTHOR_DATE']  = ENV['GIT_COMMITTER_DATE']  = commit[2]
         comment = Tempfile.new('comment')       # |
         comment.write(commit[4])                # |
         comment.close                           # `-- prepare commit meta-data
+
+        ref = commit[5]
+        name = commit[6]
+        ref = File.join(ref, name) if ref != 'trunk'
+        
         parent = ''
+        last_commit = last_commits[ref] || last_commits['trunk']
         parent = "-p #{last_commit}" if last_commit
-        last_commit = `git commit-tree #{tree_sha} #{parent} < #{comment.path}`.strip
+
+        tree_sha = `git rev-parse #{commit_sha}:#{ref}`.strip
+        
+        last_commits[ref] = `git commit-tree #{tree_sha} #{parent} < #{comment.path}`.strip
       end
-      `git update-ref refs/#{ref} #{last_commit}`
+      
+      # write the last commits heads
+      last_commits.each do |ref, sha|
+        if ref == 'trunk'
+          ref = 'heads/master' 
+        else
+          ref = ref.gsub('branches', 'heads')
+        end
+        `git update-ref refs/#{ref} #{sha}`
+      end
+      
     end
   end
   
   def build_tree_rev_shas
+    tree_exists = true
     @tree_rev_shas = {}
     @remotes = []
     Dir.chdir(@repo) do 
@@ -68,33 +71,42 @@ class SubSucka
       remotes.each do |remote|
         @remotes << remote
         branch = "#{remote}/master"
-        commits = `git log --reverse --pretty=format:"%T:%s" #{branch}`.split("\n")
+        commits = `git log --reverse --pretty=format:"%H:%s" #{branch}`.split("\n")
         commits = commits.map { |line| line.split(":") }
         commits.each do |tree_sha, rev_id|
           @tree_rev_shas[rev_id] = tree_sha
         end
       end
     end
+    @tree_rev_shas
   end
   
-  def get_repo_log(branch = '')
-    data = []
-    log = `svn log #{@svn_url}/#{branch}`
+  def build_repo_log(branch = '')
+    @repo_log = []
+    log = `svn log --verbose #{@svn_url}`
     commits = log.split('------------------------------------------------------------------------')
     commits.each do |commit|
       lines = commit.split("\n")
       next if !lines.shift
       info = lines.shift.split("|").map { |e| e.strip }
       rev, author, date, ln = info
-      lines.shift #blank
+      line = lines.shift # Changed paths:
+      ref = ''
+      while ((line = lines.shift.chomp) != '') do
+        ign, ref, name = line.split('/')
+      end rescue nil
       message = lines.join("\n")
-      data << [rev, author, date, ln, message]
+      if (ref == 'trunk')
+        name = nil 
+      else
+        name = name.split(' ').first if name
+      end
+      @repo_log << [rev, author, date, ln, message, ref, name]
     end
-    data
+    @repo_log
   end
   
   def finish_repo
-    return false
     Dir.chdir(@repo) do     
       # remove all the temporary remote branches we were using
       @remotes.each do |remote|
