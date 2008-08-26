@@ -79,7 +79,8 @@ import_part(RevTuple, Url) ->
   checkout_part(Url, Ref, StartRev, EndRev),
   cmd("git gc --aggressive", Ref),
   cmd("git update-server-info", Ref),
-  {net_adm:localhost(), Ref}.
+  cmd("ln -s .git git", Ref),
+  {erlang:atom_to_list(node()), Ref}.
   
 checkout_part(Url, Ref, N, Revisions) ->
   Out = cmd("svn co ~s -r ~b .", [Url, N], Ref),
@@ -106,7 +107,8 @@ combine_results(Remotes, Url) ->
   error_logger:info_msg("combine ~p~n", [Ref]),
   [First|Rest] = Remotes,
   {HostName, Path} = First,
-  CloneUrl = "http://" ++ HostName ++ Path ++ "/.git",
+  {_, CleanHost, _} = regexp:gsub(HostName, "(.*?)@", ""),
+  CloneUrl = "http://" ++ CleanHost ++ Path ++ "/git",
   io:format("git clone " ++ CloneUrl ++ " repo"),
   cmd("git clone " ++ CloneUrl ++ " repo", Ref),
   Repo = Ref ++ "/repo",
@@ -122,7 +124,8 @@ combine_rest_results([], Repo, Num) -> [];
 combine_rest_results(Remotes, Repo, Num) ->
   [Next|Rem] = Remotes,
   {HostName, Path} = Next,
-  CloneUrl = "http://" ++ HostName ++ Path ++ "/.git",
+  {_, CleanHost, _} = regexp:gsub(HostName, "(.*?)@", ""),
+  CloneUrl = "http://" ++ CleanHost ++ Path ++ "/git",
   cmd("git remote add r~b ~p", [Num, CloneUrl], Repo),
   cmd("git fetch r~b", [Num], Repo),
   BranchName = {"r" ++ erlang:integer_to_list(Num) ++ "/master"},
@@ -137,10 +140,10 @@ cmd(Cmd, Dir) ->
 % no more than 3 per node
 % no less than 50 per process  
 split_count(RevCount, NodeCount) ->
-  InitialGuess = round(RevCount / (NodeCount * 3)),
+  InitialGuess = round(RevCount / (NodeCount * 5)),
   case InitialGuess < 25 of
     true  -> round(RevCount / 25);
-    false -> (NodeCount * 3)
+    false -> (NodeCount * 5)
   end.
   
 split_range(Range, Splits) ->

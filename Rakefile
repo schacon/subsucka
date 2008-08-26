@@ -10,10 +10,10 @@ task :slave => [:default] do
   sh "erl -sname slave1 -setcookie subsucka -pa ./ebin"
 end
 
-task :slave2 => [:default] do
-  sh "erl -sname slave2 -setcookie subsucka -pa ./ebin"
-end
-
 task :server => [:default] do
   sh "erl -sname master1 -setcookie subsucka -pa ./ebin"
+end
+
+task :package => [:default] do
+  sh "tar -czpvf sucka.tgz Rakefile rewrite_commits.rb src/* ebin/*"
 end

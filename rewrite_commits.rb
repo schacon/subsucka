@@ -133,6 +133,7 @@ end
 
 repo_dir = ARGV[0]
 svn_url  = ARGV[1]
+repo_dir = repo_dir.gsub(/http:\/\/(.*?)\@/, 'http://')
 
 sk = SubSucka.new(repo_dir, svn_url)
 sk.build

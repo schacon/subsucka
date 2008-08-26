@@ -1,0 +1,14 @@
+#! /usr/bin/env ruby
+
+require 'lib/sucka'
+
+options = {
+  :keypair => '/Users/schacon/.ssh/id_rsa-gsg-keypair',
+  :keyname => 'gsg-keypair',
+  :amis => { 32 => "ami-adf410c4" },
+  :access_key => 'XXXXXXXXXXXXXXXXXXXX',
+  :secret_key => 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+}
+
+Sucka.new(ARGV, options).go
+
